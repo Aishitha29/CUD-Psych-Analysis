@@ -20,20 +20,6 @@ This project explores the association between **Cannabis Use Disorder (CUD)** an
 2. Run the queries in order to extract insights.
 3. Modify filters (`F12%`, `F32%`, `F41%`, `F20%`) to adjust for different ICD-10 codes.
 
-## 📝 Future Enhancements
-- Adding **data visualization** (e.g., Tableau, Python Matplotlib).
-- Extending analysis to **longitudinal trends**.
-- Exploring **causal relationships using statistical models**.
 
 ## 💡 Contact
-For any questions, reach out at **your.email@example.com** or [LinkedIn](https://linkedin.com/in/YOURUSERNAME).
-
----
-
-🚀 **Don't forget to commit this file** after saving it!  
-You can upload it via GitHub UI or use:
-
-```bash
-git add README.md
-git commit -m "Added README file"
-git push origin main
+For any questions, reach out at *aishithasri@gmail.com* or https://www.linkedin.com/in/sri-aishitha-koduru-a10026230/
