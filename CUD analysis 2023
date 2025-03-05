@@ -1,0 +1,114 @@
+-- # SQL Queries for Cannabis Use Disorder (CUD) Analysis (2023)
+-- This script analyzes the first-ever Cannabis Use Disorder (CUD) diagnoses in 2023,
+-- ensuring that the patients had no prior CUD-related records.
+
+-- ## 1. Identify First-Ever Recorded CUD Diagnoses
+WITH FirstEverCUD AS (
+    -- Find the earliest recorded CUD diagnosis for each patient
+    SELECT 
+        patid, 
+        encounterid, 
+        enc_type,
+        MIN(admit_date) AS first_cud_date  -- Earliest recorded CUD diagnosis
+    FROM DEID_DIAGNOSIS
+    WHERE DX LIKE 'F12%'  -- Cannabis Use Disorder (CUD)
+    GROUP BY patid, encounterid, enc_type
+)
+
+-- ## 2. Filter Patients Whose First-Ever CUD Diagnosis Happened in 2023
+, FirstTimeCUD2023 AS (
+    SELECT f.patid, f.encounterid, f.enc_type, f.first_cud_date
+    FROM FirstEverCUD f
+    WHERE f.first_cud_date BETWEEN '2023-01-01' AND '2023-12-31'  -- Ensure first-ever CUD is in 2023
+)
+
+-- ## 3. Count Distinct Patients Diagnosed with CUD for the First Time in 2023
+SELECT COUNT(DISTINCT patid) AS first_time_CUD_2023
+FROM FirstTimeCUD2023;
+
+-- ## 4. Identify Patients with No Prior CUD Condition Before Their First Diagnosis
+WITH NoPriorCUDCondition AS (
+    SELECT f.patid, f.first_cud_date
+    FROM FirstEverCUD f
+    LEFT JOIN DEID_CONDITION c ON f.patid = c.patid
+    WHERE c.CONDITION LIKE 'F12%'
+    AND c.ONSET_DATE < f.first_cud_date  -- Ensure no prior condition before diagnosis
+    GROUP BY f.patid, f.first_cud_date
+    HAVING COUNT(c.patid) = 0  -- Only include patients with NO prior CUD condition
+)
+
+-- ## 5. Count Patients with No Prior CUD History Before First Diagnosis in 2023
+SELECT COUNT(DISTINCT patid) AS first_time_CUD_2023
+FROM NoPriorCUDCondition
+WHERE first_cud_date BETWEEN '2023-01-01' AND '2023-12-31';
+
+-- ## 6. Identify Patients Whose First-Ever CUD Encounter Happened in 2023
+WITH FirstCUDEncounter AS (
+    SELECT f.patid, f.encounterid, f.first_cud_date, 
+           e.admit_date AS encounter_admit_date, e.enc_type, e.facility_location
+    FROM FirstEverCUD f
+    JOIN DEID_ENCOUNTER e ON f.patid = e.patid AND f.encounterid = e.encounterid
+    WHERE f.first_cud_date BETWEEN '2023-01-01' AND '2023-12-31'
+)
+
+-- ## 7. Count Patients with First CUD Encounter in 2023
+SELECT COUNT(DISTINCT patid) AS first_time_CUD_2023
+FROM FirstCUDEncounter;
+
+-- ## 8. Count Patients Who Had CUD Before 2023
+SELECT COUNT(DISTINCT patid) AS patients_with_prior_CUD
+FROM DEID_DIAGNOSIS
+WHERE DX LIKE 'F12%'
+AND admit_date < '2023-01-01';
+
+-- ## 9. Count Patients Diagnosed with CUD in 2023 but Had Prior CUD Before 2023
+SELECT COUNT(DISTINCT d.patid) AS patients_with_CUD_in_2023_but_had_prior_CUD
+FROM DEID_DIAGNOSIS d
+JOIN (
+    SELECT DISTINCT patid
+    FROM DEID_DIAGNOSIS
+    WHERE DX LIKE 'F12%'  
+    AND admit_date < '2023-01-01'  -- Patients who had CUD before 2023
+) prior_cud ON d.patid = prior_cud.patid
+WHERE d.DX LIKE 'F12%'
+AND d.admit_date BETWEEN '2023-01-01' AND '2023-12-31';
+
+-- ## 10. Identify First-Ever CUD Diagnoses in 2023 With or Without Prior Mental Health Conditions
+WITH NoPriorMentalHealth AS (
+    SELECT n.patid
+    FROM NoPriorCUDEncounter n
+    LEFT JOIN DEID_DIAGNOSIS mh
+        ON n.patid = mh.patid
+        AND (mh.DX LIKE 'F32%' OR mh.DX LIKE 'F41%' OR mh.DX LIKE 'F20%')  
+        AND mh.admit_date < n.first_cud_date
+    GROUP BY n.patid
+    HAVING COUNT(mh.patid) = 0  -- Only include patients with NO prior MH conditions
+)
+, HasPriorMentalHealth AS (
+    SELECT DISTINCT n.patid
+    FROM NoPriorCUDEncounter n
+    JOIN DEID_DIAGNOSIS mh
+        ON n.patid = mh.patid
+        AND (mh.DX LIKE 'F32%' OR mh.DX LIKE 'F41%' OR mh.DX LIKE 'F20%')  
+        AND mh.admit_date < n.first_cud_date
+)
+
+-- ## 11. Count Patients with and without Prior Mental Health Diagnoses Before First CUD Diagnosis
+SELECT 
+    (SELECT COUNT(DISTINCT patid) FROM NoPriorMentalHealth) AS first_time_CUD_without_prior_MH,
+    (SELECT COUNT(DISTINCT patid) FROM HasPriorMentalHealth) AS first_time_CUD_with_prior_MH;
+
+-- ## 12. Create a Table to Store First-Time CUD Patients in 2023
+CREATE TABLE NEXTGEN_MUIRB2122387.first_time_CUD_2023 AS
+WITH NoPriorCUDEncounter AS (
+    SELECT f.patid, f.encounterid, f.first_cud_date
+    FROM FirstEverCUD f
+    LEFT JOIN DEID_DIAGNOSIS d_prior 
+        ON f.patid = d_prior.patid  
+        AND d_prior.DX LIKE 'F12%'  
+        AND d_prior.admit_date < '2023-01-01'
+    GROUP BY f.patid, f.encounterid, f.first_cud_date
+    HAVING COUNT(d_prior.patid) = 0  -- Only include patients with NO prior CUD
+)
+SELECT * FROM NoPriorCUDEncounter
+WHERE first_cud_date BETWEEN '2023-01-01' AND '2023-12-31';
